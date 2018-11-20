@@ -39,6 +39,22 @@ func StandardCoinbaseSignatureScript(height uint32) *Script {
 	return NewScript().AddOperand(big.NewInt(int64(height)).Bytes()).AddOperand(big.NewInt(0).Bytes())
 }
 
+// SplitAddrScript returns a redeem script to lock a split address output
+func SplitAddrScript(addrs []types.Address, weights []int64) *Script {
+	if len(addrs) != len(weights) {
+		return nil
+	}
+	n := len(addrs)
+
+	// 1 [(pubkey1, w1 OP_DROP), (pubkey2, w2 OP_DROP), (pubkey3, w3 OP_DROP), ...] N CHECKMULTISIG
+	s := NewScript()
+	s.AddOpCode(OP1)
+	for i := 0; i < n; i++ {
+		s.AddOperand(addrs[i].Hash()).AddOperand(big.NewInt(weights[i]).Bytes()).AddOpCode(OPDROP)
+	}
+	return s.AddOperand(big.NewInt(int64(n)).Bytes()).AddOpCode(OPCHECKMULTISIG)
+}
+
 // Script represents scripts
 type Script []byte
 

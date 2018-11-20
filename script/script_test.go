@@ -6,6 +6,7 @@ package script
 
 import (
 	"encoding/hex"
+	"math/big"
 	"strings"
 	"testing"
 
@@ -156,9 +157,8 @@ func genMultisigScript(minSigCount, sigCount int) (*Script, *Script) {
 	testPubKeyBytes2 := testPubKey2.Serialize()
 
 	// locking script: m <Public Key A> <Public Key B> <Public Key C> 3 CHECKMULTISIG
-	opM := OpCode(int(OP1) + minSigCount - 1)
-	scriptPubKey := NewScript().AddOpCode(opM).AddOperand(testPubKeyBytes).AddOperand(testPubKeyBytes1).
-		AddOperand(testPubKeyBytes2).AddOpCode(OP3).AddOpCode(OPCHECKMULTISIG)
+	scriptPubKey := NewScript().AddOperand(big.NewInt(int64(minSigCount)).Bytes()).AddOperand(testPubKeyBytes).
+		AddOperand(testPubKeyBytes1).AddOperand(testPubKeyBytes2).AddOpCode(OP3).AddOpCode(OPCHECKMULTISIG)
 
 	hash, _ := CalcTxHashForSig([]byte(*scriptPubKey), tx, 0)
 
