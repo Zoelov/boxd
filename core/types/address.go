@@ -13,6 +13,9 @@ import (
 var addressTypeP2PKHPrefix = [2]byte{FixPrefix, 0x26}
 var addressTypeP2SHPrefix = [2]byte{FixPrefix, 0x2b}
 
+// Ripemd160Size is the size of Ripemd160 hash in bytes
+var Ripemd160Size = ripemd160.Size
+
 // const
 const (
 	BoxPrefix           = 'b'

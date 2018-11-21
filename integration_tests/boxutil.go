@@ -109,7 +109,7 @@ func execTx(account *wallet.Account, toAddrs []string, amounts []uint64,
 	}
 
 	start := time.Now()
-	_, err = client.CreateTransaction(conn, fromAddress, addrAmountMap,
+	_, err = client.CreateTransaction(conn, fromAddress, addrAmountMap, false,
 		account.PublicKey(), account)
 	if time.Since(start) > 2*rpcInterval {
 		logger.Warnf("cost %v for CreateTransaction on %s", time.Since(start), peerAddr)

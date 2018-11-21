@@ -7,7 +7,6 @@ package transactioncmd
 import (
 	"fmt"
 	"path"
-	"strconv"
 
 	root "github.com/BOXFoundation/boxd/commands/box/root"
 	"github.com/BOXFoundation/boxd/core/types"
@@ -87,11 +86,11 @@ func listAllUtxoCmdFunc(cmd *cobra.Command, args []string) {
 }
 
 func sendFromCmdFunc(cmd *cobra.Command, args []string) {
-	if len(args) < 3 {
+	if len(args) != 3 {
 		fmt.Println("Invalid argument number")
 		return
 	}
-	target, err := parseSendTarget(args[1:])
+	target, err := root.ParseSendTarget(args[1:])
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -121,7 +120,7 @@ func sendFromCmdFunc(cmd *cobra.Command, args []string) {
 	}
 	conn := client.NewConnectionWithViper(viper.GetViper())
 	defer conn.Close()
-	tx, err := client.CreateTransaction(conn, fromAddr, target, account.PublicKey(), account)
+	tx, err := client.CreateTransaction(conn, fromAddr, target, false, account.PublicKey(), account)
 	if err != nil {
 		fmt.Println(err)
 	} else {
@@ -131,29 +130,13 @@ func sendFromCmdFunc(cmd *cobra.Command, args []string) {
 	}
 }
 
-func parseSendTarget(args []string) (map[types.Address]uint64, error) {
-	targets := make(map[types.Address]uint64)
-	for i := 0; i < len(args)/2; i++ {
-		addr, err := types.NewAddress(args[i*2])
-		if err != nil {
-			return targets, err
-		}
-		amount, err := strconv.Atoi(args[i*2+1])
-		if err != nil {
-			return targets, err
-		}
-		targets[addr] = uint64(amount)
-	}
-	return targets, nil
-}
-
 func sendManyCmdFunc(cmd *cobra.Command, args []string) {
 	if len(args) < 3 {
 		fmt.Println("Invalid argument number")
 		return
 	}
 
-	target, err := parseSendTarget(args[1:])
+	target, err := root.ParseSendTarget(args[1:])
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -183,7 +166,7 @@ func sendManyCmdFunc(cmd *cobra.Command, args []string) {
 	}
 	conn := client.NewConnectionWithViper(viper.GetViper())
 	defer conn.Close()
-	tx, err := client.CreateTransaction(conn, fromAddr, target, account.PublicKey(), account)
+	tx, err := client.CreateTransaction(conn, fromAddr, target, false, account.PublicKey(), account)
 	if err != nil {
 		fmt.Println(err)
 	} else {

@@ -123,7 +123,7 @@ func transferTokenCmdFunc(cmd *cobra.Command, args []string) {
 		fmt.Println("Invalid argument format")
 		return
 	}
-	targets, err := parseSendTarget(args[3:])
+	targets, err := root.ParseSendTarget(args[3:])
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -184,20 +184,4 @@ func getTokenBalanceCmdFunc(cmd *cobra.Command, args []string) {
 	defer conn.Close()
 	balance := client.GetTokenBalance(conn, addr, tokenTxHash, uint32(tokenTxOutIdx))
 	fmt.Printf("Token balance of %s: %d\n", args[0], balance)
-}
-
-func parseSendTarget(args []string) (map[types.Address]uint64, error) {
-	targets := make(map[types.Address]uint64)
-	for i := 0; i < len(args)/2; i++ {
-		addr, err := types.NewAddress(args[i*2])
-		if err != nil {
-			return targets, err
-		}
-		amount, err := strconv.Atoi(args[i*2+1])
-		if err != nil {
-			return targets, err
-		}
-		targets[addr] = uint64(amount)
-	}
-	return targets, nil
 }

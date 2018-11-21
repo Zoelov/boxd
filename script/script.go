@@ -39,6 +39,14 @@ func StandardCoinbaseSignatureScript(height uint32) *Script {
 	return NewScript().AddOperand(big.NewInt(int64(height)).Bytes()).AddOperand(big.NewInt(0).Bytes())
 }
 
+// PayToScriptHashScript returns a p2sh script
+func PayToScriptHashScript(scriptHash []byte) *Script {
+	if len(scriptHash) != types.Ripemd160Size {
+		return nil
+	}
+	return NewScript().AddOpCode(OPHASH160).AddOperand(scriptHash).AddOpCode(OPEQUAL)
+}
+
 // SplitAddrScript returns a redeem script to lock a split address output
 func SplitAddrScript(addrs []types.Address, weights []int64) *Script {
 	if len(addrs) != len(weights) {

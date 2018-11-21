@@ -6,6 +6,7 @@ package client
 
 import (
 	"bytes"
+	"errors"
 	"fmt"
 	"reflect"
 	"sort"
@@ -25,10 +26,11 @@ var logger = log.NewLogger("rpcclient") // logger for client package
 
 // TransferParam wraps info of transfer target, type and amount
 type TransferParam struct {
-	addr    types.Address
-	isToken bool
-	amount  uint64
-	token   *types.OutPoint
+	addr        types.Address
+	isSplitAddr bool
+	isToken     bool
+	amount      uint64
+	token       *types.OutPoint
 }
 
 func (tp *TransferParam) getScript() ([]byte, error) {
@@ -37,6 +39,9 @@ func (tp *TransferParam) getScript() ([]byte, error) {
 			return nil, fmt.Errorf("token type needs to be filled")
 		}
 		return getTransferTokenScript(tp.addr.Hash(), &tp.token.Hash, tp.token.Index, tp.amount)
+	}
+	if tp.isSplitAddr {
+		return getP2SHScriptFromPubKeyHash(tp.addr.Hash())
 	}
 	return getScriptAddressFromPubKeyHash(tp.addr.Hash())
 }
@@ -79,6 +84,14 @@ func getScriptAddressFromPubKeyHash(pubKeyHash []byte) ([]byte, error) {
 		return nil, err
 	}
 	return *script.PayToPubKeyHashScript(addr.Hash()), nil
+}
+
+func getP2SHScriptFromPubKeyHash(pubKeyHash []byte) ([]byte, error) {
+	s := script.PayToScriptHashScript(pubKeyHash)
+	if s == nil {
+		return nil, errors.New("Create p2sh script error")
+	}
+	return *s, nil
 }
 
 // returns token issurance scriptPubKey

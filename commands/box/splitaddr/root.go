@@ -12,9 +12,12 @@ import (
 	root "github.com/BOXFoundation/boxd/commands/box/root"
 	"github.com/BOXFoundation/boxd/core/types"
 	"github.com/BOXFoundation/boxd/crypto"
+	"github.com/BOXFoundation/boxd/rpc/client"
 	"github.com/BOXFoundation/boxd/script"
 	"github.com/BOXFoundation/boxd/util"
+	"github.com/BOXFoundation/boxd/wallet"
 	"github.com/spf13/cobra"
+	"github.com/spf13/viper"
 )
 
 var cfgFile string
@@ -45,6 +48,11 @@ func init() {
 			Use:   "create [(address1, weight1), (addr2, weight2), (addr3, weight3), ...]",
 			Short: "Create a split address from multiple addresses and their weights",
 			Run:   createCmdFunc,
+		},
+		&cobra.Command{
+			Use:   "sendfrom fromaddr toSplitAddr amount",
+			Short: "send to a split address",
+			Run:   sendFromCmdFunc,
 		},
 	)
 }
@@ -94,4 +102,49 @@ func createCmdFunc(cmd *cobra.Command, args []string) {
 	}
 
 	fmt.Printf("Split address generated for `%s`: %s\n", args, splitAddr.String())
+}
+
+func sendFromCmdFunc(cmd *cobra.Command, args []string) {
+	if len(args) != 3 {
+		fmt.Println("Invalid argument number")
+		return
+	}
+	target, err := root.ParseSendTarget(args[1:])
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	wltMgr, err := wallet.NewWalletManager(walletDir)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	account, exists := wltMgr.GetAccount(args[0])
+	if !exists {
+		fmt.Printf("Account %s not managed\n", args[0])
+		return
+	}
+	passphrase, err := wallet.ReadPassphraseStdin()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	if err := account.UnlockWithPassphrase(passphrase); err != nil {
+		fmt.Println("Fail to unlock account", err)
+		return
+	}
+	fromAddr, err := types.NewAddress(args[0])
+	if err != nil {
+		fmt.Println("Invalid address: ", args[0])
+	}
+	conn := client.NewConnectionWithViper(viper.GetViper())
+	defer conn.Close()
+	tx, err := client.CreateTransaction(conn, fromAddr, target, true, account.PublicKey(), account)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		hash, _ := tx.TxHash()
+		fmt.Println("Tx Hash:", hash.String())
+		fmt.Println(util.PrettyPrint(tx))
+	}
 }
