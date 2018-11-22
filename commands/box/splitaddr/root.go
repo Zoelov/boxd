@@ -5,6 +5,7 @@
 package splitaddrcmd
 
 import (
+	"errors"
 	"fmt"
 	"path"
 	"strconv"
@@ -54,6 +55,11 @@ func init() {
 			Short: "send to a split address",
 			Run:   sendFromCmdFunc,
 		},
+		&cobra.Command{
+			Use:   "getbalance [(address1, weight1), (addr2, weight2), (addr3, weight3), ...]",
+			Short: "Get balances for all addresses in a split address",
+			Run:   getBalanceCmdFunc,
+		},
 	)
 }
 
@@ -77,31 +83,22 @@ func parseAddrWeight(args []string) ([]types.Address, []int64, error) {
 }
 
 func createCmdFunc(cmd *cobra.Command, args []string) {
+	fmt.Println("create called")
 	if len(args) < 2 || len(args)%2 == 1 {
 		fmt.Println("Invalid argument number: expect even number")
 		return
 	}
-
 	addrs, weights, err := parseAddrWeight(args)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-
-	s := script.SplitAddrScript(addrs, weights)
-	if s == nil {
-		fmt.Println("Generate split address error")
+	splitAddr, err := createSplitAddr(addrs, weights)
+	if err != nil {
+		fmt.Println(err)
 		return
 	}
-
-	scriptHash := crypto.Hash160(*s)
-	splitAddr, err := types.NewAddressPubKeyHash(scriptHash)
-	if s == nil {
-		fmt.Println("Generate split address error")
-		return
-	}
-
-	fmt.Printf("Split address generated for `%s`: %s\n", args, splitAddr.String())
+	fmt.Printf("Split address generated for `%s`: %s\n", args, splitAddr)
 }
 
 func sendFromCmdFunc(cmd *cobra.Command, args []string) {
@@ -147,4 +144,51 @@ func sendFromCmdFunc(cmd *cobra.Command, args []string) {
 		fmt.Println("Tx Hash:", hash.String())
 		fmt.Println(util.PrettyPrint(tx))
 	}
+}
+
+func getBalanceCmdFunc(cmd *cobra.Command, args []string) {
+	fmt.Println("getBalance called")
+	if len(args) < 2 || len(args)%2 == 1 {
+		fmt.Println("Invalid argument number: expect even number")
+		return
+	}
+	addrs, weights, err := parseAddrWeight(args)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	splitAddr, err := createSplitAddr(addrs, weights)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+
+	conn := client.NewConnectionWithViper(viper.GetViper())
+	defer conn.Close()
+	balances, err := client.GetBalance(conn, []string{splitAddr}, true /* split address */)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	totalBalance := balances[splitAddr]
+	var totalWeight uint64
+	for _, weight := range weights {
+		totalWeight += uint64(weight)
+	}
+	for i, addr := range addrs {
+		fmt.Printf("Address: %v\t balance: %d\n", addr, totalBalance*uint64(weights[i])/totalWeight)
+	}
+	fmt.Println("Total balance: ", totalBalance)
+}
+
+// create a split address from arguments
+func createSplitAddr(addrs []types.Address, weights []int64) (string, error) {
+	s := script.SplitAddrScript(addrs, weights)
+	if s == nil {
+		return "", errors.New("Generate split address error")
+	}
+
+	scriptHash := crypto.Hash160(*s)
+	splitAddr, err := types.NewAddressPubKeyHash(scriptHash)
+	return splitAddr.String(), err
 }

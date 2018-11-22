@@ -560,7 +560,7 @@ func (chain *BlockChain) applyBlock(block *types.Block, utxoSet *UtxoSet) error 
 	}
 
 	if err := chain.filterHolder.AddFilter(block.Height, *block.BlockHash(), chain.DB(), func() bloom.Filter {
-		return GetFilterForTransactionScript(block, utxoSet.utxoMap)
+		return GetFilterForTxScript(block, utxoSet)
 	}); err != nil {
 		return err
 	}
@@ -659,9 +659,14 @@ func (chain *BlockChain) ListAllUtxos() (map[types.OutPoint]*types.UtxoWrap, err
 }
 
 // LoadUtxoByAddress list all the available utxos owned by an address, including token utxos
-func (chain *BlockChain) LoadUtxoByAddress(addr types.Address) (map[types.OutPoint]*types.UtxoWrap, error) {
-	payToPubKeyHashScript := *script.PayToPubKeyHashScript(addr.Hash())
-	blockHashes := chain.filterHolder.ListMatchedBlockHashes(payToPubKeyHashScript)
+func (chain *BlockChain) LoadUtxoByAddress(addr types.Address, isSplitAddr bool) (map[types.OutPoint]*types.UtxoWrap, error) {
+	var scriptPubKey []byte
+	if !isSplitAddr {
+		scriptPubKey = *script.PayToPubKeyHashScript(addr.Hash())
+	} else {
+		scriptPubKey = *script.PayToScriptHashScript(addr.Hash())
+	}
+	blockHashes := chain.filterHolder.ListMatchedBlockHashes(scriptPubKey)
 	utxos := make(map[types.OutPoint]*types.UtxoWrap)
 	utxoSet := NewUtxoSet()
 	for _, hash := range blockHashes {
@@ -669,12 +674,12 @@ func (chain *BlockChain) LoadUtxoByAddress(addr types.Address) (map[types.OutPoi
 		if err != nil {
 			return nil, err
 		}
-		if err = utxoSet.ApplyBlockWithScriptFilter(block, payToPubKeyHashScript); err != nil {
+		if err = utxoSet.ApplyBlockWithScriptFilter(block, scriptPubKey); err != nil {
 			return nil, err
 		}
 	}
 	for key, value := range utxoSet.utxoMap {
-		if util.IsPrefixed(value.Output.ScriptPubKey, payToPubKeyHashScript) && !value.IsSpent {
+		if util.IsPrefixed(value.Output.ScriptPubKey, scriptPubKey) && !value.IsSpent {
 			utxos[key] = value
 		}
 	}
@@ -989,17 +994,17 @@ func (chain *BlockChain) FetchNBlockAfterSpecificHash(hash crypto.HashType, num 
 	return blocks, nil
 }
 
-// GetFilterForTransactionScript returns the bloom filter for all the script address
+// GetFilterForTxScript returns the bloom filter for all the script address
 // of the transactions in the block, it will use the pre-calculated filter if there
 // is any
-func GetFilterForTransactionScript(block *types.Block, utxoUsed map[types.OutPoint]*types.UtxoWrap) bloom.Filter {
+func GetFilterForTxScript(block *types.Block, utxo *UtxoSet) bloom.Filter {
 	var vin, vout [][]byte
 	for _, tx := range block.Txs {
 		for _, out := range tx.Vout {
 			vout = append(vout, out.ScriptPubKey)
 		}
 	}
-	for _, utxo := range utxoUsed {
+	for _, utxo := range utxo.utxoMap {
 		if utxo != nil && utxo.Output != nil {
 			vin = append(vin, utxo.Output.ScriptPubKey)
 		}
@@ -1035,7 +1040,7 @@ func (chain *BlockChain) loadFilters() error {
 			return err
 		}
 		if err := chain.filterHolder.AddFilter(i, *block.Hash, chain.DB(), func() bloom.Filter {
-			return GetFilterForTransactionScript(block, utxoSet.utxoMap)
+			return GetFilterForTxScript(block, utxoSet)
 		}); err != nil {
 			logger.Error("Failed to addFilter", err)
 			return err
@@ -1045,10 +1050,15 @@ func (chain *BlockChain) loadFilters() error {
 	return nil
 }
 
-// GetTransactionsByAddr search the main chain about transaction relate to give address
-func (chain *BlockChain) GetTransactionsByAddr(addr types.Address) ([]*types.Transaction, error) {
-	payToPubKeyHashScript := *script.PayToPubKeyHashScript(addr.Hash())
-	hashes := chain.filterHolder.ListMatchedBlockHashes(payToPubKeyHashScript)
+// GetTxsByAddr search the main chain about transaction relate to give address
+func (chain *BlockChain) GetTxsByAddr(addr types.Address, isSplitAddr bool) ([]*types.Transaction, error) {
+	var scriptPubKey []byte
+	if !isSplitAddr {
+		scriptPubKey = *script.PayToPubKeyHashScript(addr.Hash())
+	} else {
+		scriptPubKey = *script.PayToScriptHashScript(addr.Hash())
+	}
+	hashes := chain.filterHolder.ListMatchedBlockHashes(scriptPubKey)
 	utxoSet := NewUtxoSet()
 	var txs []*types.Transaction
 	for _, hash := range hashes {
@@ -1059,7 +1069,7 @@ func (chain *BlockChain) GetTransactionsByAddr(addr types.Address) ([]*types.Tra
 		for _, tx := range block.Txs {
 			isRelated := false
 			for index, vout := range tx.Vout {
-				if bytes.Equal(vout.ScriptPubKey, payToPubKeyHashScript) {
+				if bytes.Equal(vout.ScriptPubKey, scriptPubKey) {
 					utxoSet.AddUtxo(tx, uint32(index), block.Height)
 					isRelated = true
 				}

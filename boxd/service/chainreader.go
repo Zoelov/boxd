@@ -14,7 +14,7 @@ type ChainReader interface {
 	// interface to reader utxos
 	ListAllUtxos() (map[types.OutPoint]*types.UtxoWrap, error)
 	// LoadUtxoByPubKeyScript([]byte) (map[types.OutPoint]*types.UtxoWrap, error)
-	LoadUtxoByAddress(types.Address) (map[types.OutPoint]*types.UtxoWrap, error)
+	LoadUtxoByAddress(types.Address, bool) (map[types.OutPoint]*types.UtxoWrap, error)
 
 	// interface to read transactions
 	LoadTxByHash(crypto.HashType) (*types.Transaction, error)
@@ -25,5 +25,5 @@ type ChainReader interface {
 	LoadBlockByHash(crypto.HashType) (*types.Block, error)
 
 	// address related search method
-	GetTransactionsByAddr(types.Address) ([]*types.Transaction, error)
+	GetTxsByAddr(types.Address, bool) ([]*types.Transaction, error)
 }

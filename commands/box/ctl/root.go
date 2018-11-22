@@ -7,13 +7,14 @@ package ctl
 import (
 	"encoding/hex"
 	"fmt"
+	"path"
+	"strconv"
+
 	"github.com/BOXFoundation/boxd/core/types"
 	"github.com/BOXFoundation/boxd/crypto"
 	"github.com/BOXFoundation/boxd/rpc/client"
 	"github.com/BOXFoundation/boxd/wallet"
 	"github.com/spf13/viper"
-	"path"
-	"strconv"
 
 	"github.com/BOXFoundation/boxd/commands/box/root"
 	"github.com/BOXFoundation/boxd/util"
@@ -184,7 +185,7 @@ func getBalanceCmdFunc(cmd *cobra.Command, args []string) {
 	}
 	conn := client.NewConnectionWithViper(viper.GetViper())
 	defer conn.Close()
-	balances, err := client.GetBalance(conn, addrs)
+	balances, err := client.GetBalance(conn, addrs, false /* not split address */)
 	if err != nil {
 		fmt.Println(err)
 		return

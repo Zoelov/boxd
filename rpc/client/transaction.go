@@ -195,11 +195,11 @@ func ListUtxos(conn *grpc.ClientConn) (*rpcpb.ListUtxosResponse, error) {
 }
 
 // GetBalance returns total amount of an address
-func GetBalance(conn *grpc.ClientConn, addresses []string) (map[string]uint64, error) {
+func GetBalance(conn *grpc.ClientConn, addresses []string, isSplitAddr bool) (map[string]uint64, error) {
 	c := rpcpb.NewTransactionCommandClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
-	r, err := c.GetBalance(ctx, &rpcpb.GetBalanceRequest{Addrs: addresses})
+	r, err := c.GetBalance(ctx, &rpcpb.GetBalanceRequest{Addrs: addresses, IsSplitAddr: isSplitAddr})
 	if err != nil {
 		return map[string]uint64{}, err
 	}

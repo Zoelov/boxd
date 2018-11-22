@@ -34,7 +34,7 @@ func (s *wltServer) ListTransactions(ctx context.Context, req *rpcpb.ListTransac
 		return &rpcpb.ListTransactionsResponse{Code: -1, Message: "Invalid Address"}, err
 	}
 	logger.Infof("Search Transaction related to address: %s", addr.String())
-	txs, err := s.server.GetChainReader().GetTransactionsByAddr(addr)
+	txs, err := s.server.GetChainReader().GetTxsByAddr(addr, false)
 	if err != nil {
 		return &rpcpb.ListTransactionsResponse{Code: -1, Message: "Error Searching Transactions"}, err
 	}

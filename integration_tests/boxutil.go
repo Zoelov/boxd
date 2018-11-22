@@ -36,7 +36,7 @@ func balanceNoPanicFor(accAddr string, peerAddr string) (uint64, error) {
 	defer cancel()
 	rpcClient := rpcpb.NewTransactionCommandClient(conn)
 	start := time.Now()
-	r, err := rpcClient.GetBalance(ctx, &rpcpb.GetBalanceRequest{Addrs: []string{accAddr}})
+	r, err := rpcClient.GetBalance(ctx, &rpcpb.GetBalanceRequest{Addrs: []string{accAddr}, IsSplitAddr: false})
 	if time.Since(start) > rpcInterval {
 		logger.Warnf("cost %v for GetBalance on %s", time.Since(start), peerAddr)
 	}

@@ -80,7 +80,7 @@ func (s *txServer) GetBalance(ctx context.Context, req *rpcpb.GetBalanceRequest)
 		if err != nil {
 			return &rpcpb.GetBalanceResponse{Code: -1, Message: err.Error()}, err
 		}
-		amount, err := s.getbalance(ctx, addr)
+		amount, err := s.getbalance(ctx, addr, req.IsSplitAddr)
 		if err != nil {
 			return &rpcpb.GetBalanceResponse{Code: -1, Message: err.Error()}, err
 		}
@@ -119,8 +119,8 @@ func (s *txServer) GetTokenBalance(ctx context.Context, req *rpcpb.GetTokenBalan
 	}, nil
 }
 
-func (s *txServer) getbalance(ctx context.Context, addr types.Address) (uint64, error) {
-	utxos, err := s.server.GetChainReader().LoadUtxoByAddress(addr)
+func (s *txServer) getbalance(ctx context.Context, addr types.Address, isSplitAddr bool) (uint64, error) {
+	utxos, err := s.server.GetChainReader().LoadUtxoByAddress(addr, isSplitAddr)
 	if err != nil {
 		return 0, err
 	}
@@ -132,7 +132,7 @@ func (s *txServer) getbalance(ctx context.Context, addr types.Address) (uint64, 
 }
 
 func (s *txServer) getTokenBalance(ctx context.Context, addr types.Address, token *types.OutPoint) (uint64, error) {
-	utxos, err := s.server.GetChainReader().LoadUtxoByAddress(addr)
+	utxos, err := s.server.GetChainReader().LoadUtxoByAddress(addr, false)
 	if err != nil {
 		return 0, err
 	}
@@ -172,7 +172,7 @@ func (s *txServer) FundTransaction(ctx context.Context, req *rpcpb.FundTransacti
 	if err != nil {
 		return &rpcpb.ListUtxosResponse{Code: 1, Message: err.Error()}, nil
 	}
-	utxos, err := bc.LoadUtxoByAddress(addr)
+	utxos, err := bc.LoadUtxoByAddress(addr, false)
 	if err != nil {
 		return &rpcpb.ListUtxosResponse{Code: 1, Message: err.Error()}, nil
 	}

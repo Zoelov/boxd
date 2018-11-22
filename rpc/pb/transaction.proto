@@ -109,6 +109,7 @@ message ListUtxosResponse {
 
 message GetBalanceRequest {
     repeated string addrs = 1;
+    bool is_split_addr = 2;
 }
 
 message GetBalanceResponse {
