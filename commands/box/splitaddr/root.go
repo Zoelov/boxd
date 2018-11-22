@@ -63,9 +63,9 @@ func init() {
 	)
 }
 
-func parseAddrWeight(args []string) ([]types.Address, []int64, error) {
+func parseAddrWeight(args []string) ([]types.Address, []uint64, error) {
 	addrs := make([]types.Address, 0)
-	weights := make([]int64, 0)
+	weights := make([]uint64, 0)
 	for i := 0; i < len(args)/2; i++ {
 		addr, err := types.NewAddress(args[i*2])
 		if err != nil {
@@ -77,7 +77,7 @@ func parseAddrWeight(args []string) ([]types.Address, []int64, error) {
 		if err != nil {
 			return nil, nil, err
 		}
-		weights = append(weights, int64(weight))
+		weights = append(weights, uint64(weight))
 	}
 	return addrs, weights, nil
 }
@@ -173,16 +173,16 @@ func getBalanceCmdFunc(cmd *cobra.Command, args []string) {
 	totalBalance := balances[splitAddr]
 	var totalWeight uint64
 	for _, weight := range weights {
-		totalWeight += uint64(weight)
+		totalWeight += weight
 	}
 	for i, addr := range addrs {
-		fmt.Printf("Address: %v\t balance: %d\n", addr, totalBalance*uint64(weights[i])/totalWeight)
+		fmt.Printf("Address: %v\t balance: %d\n", addr, totalBalance*weights[i]/totalWeight)
 	}
 	fmt.Println("Total balance: ", totalBalance)
 }
 
 // create a split address from arguments
-func createSplitAddr(addrs []types.Address, weights []int64) (string, error) {
+func createSplitAddr(addrs []types.Address, weights []uint64) (string, error) {
 	s := script.SplitAddrScript(addrs, weights)
 	if s == nil {
 		return "", errors.New("Generate split address error")
