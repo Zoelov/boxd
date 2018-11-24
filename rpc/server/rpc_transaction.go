@@ -168,11 +168,16 @@ func (s *txServer) getTokenBalance(ctx context.Context, addr types.Address, toke
 func (s *txServer) FundTransaction(ctx context.Context, req *rpcpb.FundTransactionRequest) (*rpcpb.ListUtxosResponse, error) {
 	bc := s.server.GetChainReader()
 	addr, err := types.NewAddress(req.Addr)
-	payToPubKeyHashScript := *script.PayToPubKeyHashScript(addr.Hash())
+	var scriptPubKey []byte
+	if !req.IsSplitAddr {
+		scriptPubKey = *script.PayToPubKeyHashScript(addr.Hash())
+	} else {
+		scriptPubKey = *script.PayToScriptHashScript(addr.Hash())
+	}
 	if err != nil {
 		return &rpcpb.ListUtxosResponse{Code: 1, Message: err.Error()}, nil
 	}
-	utxos, err := bc.LoadUtxoByAddress(addr, false)
+	utxos, err := bc.LoadUtxoByAddress(addr, req.IsSplitAddr)
 	if err != nil {
 		return &rpcpb.ListUtxosResponse{Code: 1, Message: err.Error()}, nil
 	}
@@ -188,7 +193,7 @@ func (s *txServer) FundTransaction(ctx context.Context, req *rpcpb.FundTransacti
 	for _, tx := range memPoolTxs {
 		for txOutIdx, txOut := range tx.Vout {
 			// utxo for this address
-			if util.IsPrefixed(txOut.ScriptPubKey, payToPubKeyHashScript) {
+			if util.IsPrefixed(txOut.ScriptPubKey, scriptPubKey) {
 				if err := utxoSet.AddUtxo(tx, uint32(txOutIdx), nextHeight); err != nil {
 					return &rpcpb.ListUtxosResponse{Code: 1, Message: err.Error()}, nil
 				}

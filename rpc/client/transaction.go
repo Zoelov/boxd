@@ -26,19 +26,15 @@ func GetFeePrice(conn *grpc.ClientConn) (uint64, error) {
 }
 
 // FundTransaction gets the utxo of a public key
-func FundTransaction(conn *grpc.ClientConn, addr types.Address, amount uint64) (*rpcpb.ListUtxosResponse, error) {
-	p2pkScript, err := getScriptAddressFromPubKeyHash(addr.Hash())
-	if err != nil {
-		return nil, err
-	}
-	logger.Debugf("Script Value: %v", p2pkScript)
+func FundTransaction(conn *grpc.ClientConn, addr types.Address, isSplitAddr bool, amount uint64) (*rpcpb.ListUtxosResponse, error) {
 	c := rpcpb.NewTransactionCommandClient(conn)
 	ctx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
 	defer cancel()
 
 	r, err := c.FundTransaction(ctx, &rpcpb.FundTransactionRequest{
-		Addr:   addr.String(),
-		Amount: amount,
+		Addr:        addr.String(),
+		IsSplitAddr: isSplitAddr,
+		Amount:      amount,
 	})
 	if err != nil {
 		return nil, err
@@ -86,15 +82,15 @@ func FundTokenTransaction(conn *grpc.ClientConn, addr types.Address, token *type
 }
 
 // CreateTransaction retrieves all the utxo of a public key, and use some of them to send transaction
-func CreateTransaction(conn *grpc.ClientConn, fromAddress types.Address, targets map[types.Address]uint64,
-	isSplitAddr bool, pubKeyBytes []byte, signer crypto.Signer) (*types.Transaction, error) {
+func CreateTransaction(conn *grpc.ClientConn, fromAddress, changeAddress types.Address, targets map[types.Address]uint64,
+	isFromAddrSplit bool, isToAddrSplit bool, pubKeyBytes []byte, signer crypto.Signer) (*types.Transaction, error) {
 	var totalAmount uint64
 	transferTargets := make([]*TransferParam, 0)
 	for addr, amount := range targets {
 		totalAmount += amount
 		transferTargets = append(transferTargets, &TransferParam{
 			addr:        addr,
-			isSplitAddr: isSplitAddr,
+			isSplitAddr: isToAddrSplit,
 			isToken:     false,
 			amount:      amount,
 			token:       nil,
@@ -102,7 +98,7 @@ func CreateTransaction(conn *grpc.ClientConn, fromAddress types.Address, targets
 	}
 	change := &corepb.TxOut{
 		Value:        0,
-		ScriptPubKey: getScriptAddress(fromAddress),
+		ScriptPubKey: getScriptAddress(changeAddress),
 	}
 
 	price, err := GetFeePrice(conn)
@@ -112,19 +108,19 @@ func CreateTransaction(conn *grpc.ClientConn, fromAddress types.Address, targets
 
 	var tx *corepb.Transaction
 	for {
-		utxoResponse, err := FundTransaction(conn, fromAddress, totalAmount)
+		utxoResponse, err := FundTransaction(conn, fromAddress, isFromAddrSplit, totalAmount)
 		if err != nil {
 			return nil, err
 		}
 		if tx, err = generateTx(fromAddress, utxoResponse.GetUtxos(), transferTargets, change); err != nil {
 			return nil, err
 		}
-		if err = signTransaction(tx, utxoResponse.GetUtxos(), pubKeyBytes, signer); err != nil {
+		if err = signTransaction(tx, utxoResponse.GetUtxos(), pubKeyBytes, isFromAddrSplit, signer); err != nil {
 			return nil, err
 		}
 		ok, adjustedAmount := tryBalance(tx, change, utxoResponse.Utxos, price)
 		if ok {
-			signTransaction(tx, utxoResponse.GetUtxos(), pubKeyBytes, signer)
+			signTransaction(tx, utxoResponse.GetUtxos(), pubKeyBytes, isFromAddrSplit, signer)
 			break
 		}
 		totalAmount = adjustedAmount

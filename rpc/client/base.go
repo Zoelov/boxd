@@ -275,7 +275,7 @@ func generateTx(fromAddr types.Address, utxos []*rpcpb.Utxo, targets []*Transfer
 	return tx, nil
 }
 
-func signTransaction(tx *corepb.Transaction, utxos []*rpcpb.Utxo, fromPubKeyBytes []byte, signer crypto.Signer) error {
+func signTransaction(tx *corepb.Transaction, utxos []*rpcpb.Utxo, fromPubKeyBytes []byte, isSplitAddr bool, signer crypto.Signer) error {
 	// Sign the tx inputs
 	typedTx := &types.Transaction{}
 	if err := typedTx.FromProtoMessage(tx); err != nil {
@@ -287,7 +287,14 @@ func signTransaction(tx *corepb.Transaction, utxos []*rpcpb.Utxo, fromPubKeyByte
 			return err
 		}
 		prevScriptPubKey := script.NewScriptFromBytes(prevScriptPubKeyBytes)
-		sigHash, err := script.CalcTxHashForSig(prevScriptPubKeyBytes, typedTx, txInIdx)
+		var signedScriptPubKey []byte
+		if !isSplitAddr {
+			signedScriptPubKey = prevScriptPubKeyBytes
+		} else {
+			// For split script, script itself is signed, not public key as in other P2SH script
+			signedScriptPubKey = fromPubKeyBytes
+		}
+		sigHash, err := script.CalcTxHashForSig(signedScriptPubKey, typedTx, txInIdx)
 		if err != nil {
 			return err
 		}

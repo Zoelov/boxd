@@ -94,6 +94,7 @@ message FundTransactionRequest {
     string addr = 1;
     uint64 amount = 2;
     repeated TokenAmount tokenBudgets= 3;
+    bool is_split_addr = 4;
 }
 
 message SendTransactionRequest {

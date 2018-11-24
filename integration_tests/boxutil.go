@@ -109,7 +109,7 @@ func execTx(account *wallet.Account, toAddrs []string, amounts []uint64,
 	}
 
 	start := time.Now()
-	_, err = client.CreateTransaction(conn, fromAddress, addrAmountMap, false,
+	_, err = client.CreateTransaction(conn, fromAddress, fromAddress, addrAmountMap, false, false,
 		account.PublicKey(), account)
 	if time.Since(start) > 2*rpcInterval {
 		logger.Warnf("cost %v for CreateTransaction on %s", time.Since(start), peerAddr)
@@ -133,7 +133,7 @@ func utxosNoPanicFor(accAddr string, peerAddr string) ([]*rpcpb.Utxo, error) {
 	}
 	logger.Debugf("fund transaction for %s balance %d", addr, b)
 	start := time.Now()
-	r, err := client.FundTransaction(conn, addr, b)
+	r, err := client.FundTransaction(conn, addr, false, b)
 	if time.Since(start) > rpcInterval {
 		logger.Warnf("cost %v for FundTransaction on %s", time.Since(start), peerAddr)
 	}
@@ -162,7 +162,7 @@ func utxosWithBalanceFor(accAddr string, balance uint64, peerAddr string) []*rpc
 		logger.Panic(err)
 	}
 	start := time.Now()
-	r, err := client.FundTransaction(conn, addr, balance)
+	r, err := client.FundTransaction(conn, addr, false, balance)
 	if time.Since(start) > rpcInterval {
 		logger.Warnf("cost %v for FundTransaction on %s", time.Since(start), peerAddr)
 	}

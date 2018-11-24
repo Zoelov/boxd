@@ -5,6 +5,7 @@
 package splitaddrcmd
 
 import (
+	"encoding/hex"
 	"errors"
 	"fmt"
 	"path"
@@ -46,40 +47,26 @@ func init() {
 	rootCmd.PersistentFlags().StringVar(&walletDir, "wallet_dir", defaultWalletDir, "Specify directory to search keystore files")
 	rootCmd.AddCommand(
 		&cobra.Command{
-			Use:   "create [(address1, weight1), (addr2, weight2), (addr3, weight3), ...]",
-			Short: "Create a split address from multiple addresses and their weights",
+			Use:   "create [(addr1, weight1), (addr2, weight2), (addr3, weight3), ...]",
+			Short: "Create a split address from multiple addresses and their weights: address order matters",
 			Run:   createCmdFunc,
 		},
 		&cobra.Command{
 			Use:   "sendfrom fromaddr toSplitAddr amount",
-			Short: "send to a split address",
+			Short: "send from regular address to a split address",
 			Run:   sendFromCmdFunc,
 		},
 		&cobra.Command{
-			Use:   "getbalance [(address1, weight1), (addr2, weight2), (addr3, weight3), ...]",
+			Use:   "redeem addr2 toAddr amount [(addr1, weight1), (addr2, weight2), (addr3, weight3), ...]",
+			Short: "send from split address to regular address",
+			Run:   redeemCmdFunc,
+		},
+		&cobra.Command{
+			Use:   "getbalance [(addr1, weight1), (addr2, weight2), (addr3, weight3), ...]",
 			Short: "Get balances for all addresses in a split address",
 			Run:   getBalanceCmdFunc,
 		},
 	)
-}
-
-func parseAddrWeight(args []string) ([]types.Address, []uint64, error) {
-	addrs := make([]types.Address, 0)
-	weights := make([]uint64, 0)
-	for i := 0; i < len(args)/2; i++ {
-		addr, err := types.NewAddress(args[i*2])
-		if err != nil {
-			return nil, nil, err
-		}
-		addrs = append(addrs, addr)
-
-		weight, err := strconv.Atoi(args[i*2+1])
-		if err != nil {
-			return nil, nil, err
-		}
-		weights = append(weights, uint64(weight))
-	}
-	return addrs, weights, nil
 }
 
 func createCmdFunc(cmd *cobra.Command, args []string) {
@@ -88,12 +75,12 @@ func createCmdFunc(cmd *cobra.Command, args []string) {
 		fmt.Println("Invalid argument number: expect even number")
 		return
 	}
-	addrs, weights, err := parseAddrWeight(args)
+	pubKeys, weights, err := parsePubKeyWeight(args)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	splitAddr, err := createSplitAddr(addrs, weights)
+	splitAddr, _, err := createSplitAddr(pubKeys, weights)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -136,7 +123,72 @@ func sendFromCmdFunc(cmd *cobra.Command, args []string) {
 	}
 	conn := client.NewConnectionWithViper(viper.GetViper())
 	defer conn.Close()
-	tx, err := client.CreateTransaction(conn, fromAddr, target, true, account.PublicKey(), account)
+	tx, err := client.CreateTransaction(conn, fromAddr, fromAddr, target, false, /* from addr not split */
+		true /* to addr split */, account.PublicKey(), account)
+	if err != nil {
+		fmt.Println(err)
+	} else {
+		hash, _ := tx.TxHash()
+		fmt.Println("Tx Hash:", hash.String())
+		fmt.Println(util.PrettyPrint(tx))
+	}
+}
+
+func redeemCmdFunc(cmd *cobra.Command, args []string) {
+	if len(args) < 5 {
+		fmt.Println("Invalid argument number")
+		return
+	}
+	target, err := root.ParseSendTarget(args[1:3])
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	addrs, weights, err := parsePubKeyWeight(args[3:])
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	splitAddr, splitScript, err := createSplitAddr(addrs, weights)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	wltMgr, err := wallet.NewWalletManager(walletDir)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	// TODO: ensure sender is in addrs
+	account, exists := wltMgr.GetAccount(args[0])
+	if !exists {
+		fmt.Printf("Account %s not managed\n", args[0])
+		return
+	}
+	passphrase, err := wallet.ReadPassphraseStdin()
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	if err := account.UnlockWithPassphrase(passphrase); err != nil {
+		fmt.Println("Fail to unlock account", err)
+		return
+	}
+	fromSplitAddr, err := types.NewAddress(splitAddr)
+	if err != nil {
+		fmt.Println("Invalid address: ", splitAddr)
+	}
+	changeAddr, err := types.NewAddress(args[0])
+	if err != nil {
+		fmt.Println("Invalid address: ", args[0])
+	}
+	conn := client.NewConnectionWithViper(viper.GetViper())
+	defer conn.Close()
+
+	// p2pkh unlock: sig + pubKey
+	// split unlock: sig + redeem script
+	tx, err := client.CreateTransaction(conn, fromSplitAddr, changeAddr, target, true, /* from addr split */
+		false /* to addr not split */, *splitScript /* at the same place as public key*/, account)
 	if err != nil {
 		fmt.Println(err)
 	} else {
@@ -152,12 +204,12 @@ func getBalanceCmdFunc(cmd *cobra.Command, args []string) {
 		fmt.Println("Invalid argument number: expect even number")
 		return
 	}
-	addrs, weights, err := parseAddrWeight(args)
+	addrs, weights, err := parsePubKeyWeight(args)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	splitAddr, err := createSplitAddr(addrs, weights)
+	splitAddr, _, err := createSplitAddr(addrs, weights)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -181,14 +233,33 @@ func getBalanceCmdFunc(cmd *cobra.Command, args []string) {
 	fmt.Println("Total balance: ", totalBalance)
 }
 
+func parsePubKeyWeight(args []string) ([][]byte, []uint64, error) {
+	pubKeys := make([][]byte, 0)
+	weights := make([]uint64, 0)
+	for i := 0; i < len(args)/2; i++ {
+		pubKey, err := hex.DecodeString(args[i*2])
+		if err != nil {
+			return nil, nil, err
+		}
+		pubKeys = append(pubKeys, pubKey)
+
+		weight, err := strconv.Atoi(args[i*2+1])
+		if err != nil {
+			return nil, nil, err
+		}
+		weights = append(weights, uint64(weight))
+	}
+	return pubKeys, weights, nil
+}
+
 // create a split address from arguments
-func createSplitAddr(addrs []types.Address, weights []uint64) (string, error) {
-	s := script.SplitAddrScript(addrs, weights)
+func createSplitAddr(pubKeys [][]byte, weights []uint64) (string, *script.Script, error) {
+	s := script.SplitAddrScript(pubKeys, weights)
 	if s == nil {
-		return "", errors.New("Generate split address error")
+		return "", nil, errors.New("Generate split address error")
 	}
 
 	scriptHash := crypto.Hash160(*s)
 	splitAddr, err := types.NewAddressPubKeyHash(scriptHash)
-	return splitAddr.String(), err
+	return splitAddr.String(), s, err
 }

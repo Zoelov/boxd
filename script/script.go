@@ -48,11 +48,11 @@ func PayToScriptHashScript(scriptHash []byte) *Script {
 }
 
 // SplitAddrScript returns a redeem script to lock a split address output
-func SplitAddrScript(addrs []types.Address, weights []uint64) *Script {
-	if len(addrs) != len(weights) {
+func SplitAddrScript(pubKeys [][]byte, weights []uint64) *Script {
+	if len(pubKeys) != len(weights) {
 		return nil
 	}
-	n := len(addrs)
+	n := len(pubKeys)
 
 	// 1 [(pubkey1, w1 OP_DROP), (pubkey2, w2 OP_DROP), (pubkey3, w3 OP_DROP), ...] N CHECKMULTISIG
 	s := NewScript()
@@ -60,7 +60,7 @@ func SplitAddrScript(addrs []types.Address, weights []uint64) *Script {
 	for i := 0; i < n; i++ {
 		weight := big.NewInt(0)
 		weight.SetUint64(weights[i])
-		s.AddOperand(addrs[i].Hash()).AddOperand(weight.Bytes()).AddOpCode(OPDROP)
+		s.AddOperand(pubKeys[i]).AddOperand(weight.Bytes()).AddOpCode(OPDROP)
 	}
 	return s.AddOperand(big.NewInt(int64(n)).Bytes()).AddOpCode(OPCHECKMULTISIG)
 }

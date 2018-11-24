@@ -7,10 +7,11 @@ package client
 import (
 	"context"
 	"fmt"
+	"time"
+
 	"github.com/BOXFoundation/boxd/core/pb"
 	"github.com/BOXFoundation/boxd/util"
 	"google.golang.org/grpc"
-	"time"
 
 	"github.com/BOXFoundation/boxd/core/types"
 	"github.com/BOXFoundation/boxd/crypto"
@@ -44,17 +45,17 @@ func CreateTokenIssueTx(conn *grpc.ClientConn, fromAddress, toAddress types.Addr
 		ScriptPubKey: getScriptAddress(fromAddress),
 	}
 	for {
-		utxoResponse, err := FundTransaction(conn, fromAddress, amount)
+		utxoResponse, err := FundTransaction(conn, fromAddress, false, amount)
 		if err != nil {
 			return nil, err
 		}
 		tx = generateTokenIssueTransaction(issueScript, utxoResponse.GetUtxos(), change)
-		if err = signTransaction(tx, utxoResponse.GetUtxos(), pubKeyBytes, signer); err != nil {
+		if err = signTransaction(tx, utxoResponse.GetUtxos(), pubKeyBytes, false, signer); err != nil {
 			return nil, err
 		}
 		ok, adjustedAmount := tryBalance(tx, change, utxoResponse.Utxos, price)
 		if ok {
-			signTransaction(tx, utxoResponse.GetUtxos(), pubKeyBytes, signer)
+			signTransaction(tx, utxoResponse.GetUtxos(), pubKeyBytes, false, signer)
 			break
 		}
 		amount = adjustedAmount
@@ -115,12 +116,12 @@ func CreateTokenTransferTx(conn *grpc.ClientConn, fromAddress types.Address, tar
 		if tx, err = generateTx(fromAddress, utxoResponse.GetUtxos(), transferTargets, change); err != nil {
 			return nil, err
 		}
-		if err = signTransaction(tx, utxoResponse.GetUtxos(), pubKeyBytes, signer); err != nil {
+		if err = signTransaction(tx, utxoResponse.GetUtxos(), pubKeyBytes, false, signer); err != nil {
 			return nil, err
 		}
 		ok, adjustedAmount := tryBalance(tx, change, utxoResponse.Utxos, price)
 		if ok {
-			signTransaction(tx, utxoResponse.GetUtxos(), pubKeyBytes, signer)
+			signTransaction(tx, utxoResponse.GetUtxos(), pubKeyBytes, false, signer)
 			break
 		}
 		boxAmount = adjustedAmount

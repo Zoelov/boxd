@@ -52,6 +52,12 @@ var (
 		0x0F, 0x10, 0x11, 0x12, 0x13, // 160-bit redeemp script hash: end
 		byte(OPEQUAL),
 	}
+
+	testPrivKey1, testPubKey1, _ = crypto.NewKeyPair()
+	testPubKeyBytes1             = testPubKey1.Serialize()
+
+	testPrivKey2, testPubKey2, _ = crypto.NewKeyPair()
+	testPubKeyBytes2             = testPubKey2.Serialize()
 )
 
 // test script not dependent on a tx
@@ -123,7 +129,7 @@ func TestP2PKH(t *testing.T) {
 
 func genP2SHScript() (*Script, *Script) {
 	// redeem script
-	redeemScript := NewScript().AddOperand(testPubKeyBytes).AddOpCode(OPCHECKSIG)
+	redeemScript := SplitAddrScript([][]byte{testPubKeyBytes, testPubKeyBytes1}, []uint64{1, 4})
 	redeemScriptHash := crypto.Hash160(*redeemScript)
 
 	// locking script
@@ -150,12 +156,6 @@ func TestP2SH(t *testing.T) {
 // minSigCount: minimal number of signatures required
 // sigCount: number of signatures included in unlocking script
 func genMultisigScript(minSigCount, sigCount int) (*Script, *Script) {
-	testPrivKey1, testPubKey1, _ := crypto.NewKeyPair()
-	testPubKeyBytes1 := testPubKey1.Serialize()
-
-	testPrivKey2, testPubKey2, _ := crypto.NewKeyPair()
-	testPubKeyBytes2 := testPubKey2.Serialize()
-
 	// locking script: m <Public Key A> <Public Key B> <Public Key C> 3 CHECKMULTISIG
 	scriptPubKey := NewScript().AddOperand(big.NewInt(int64(minSigCount)).Bytes()).AddOperand(testPubKeyBytes).
 		AddOperand(testPubKeyBytes1).AddOperand(testPubKeyBytes2).AddOpCode(OP3).AddOpCode(OPCHECKMULTISIG)
