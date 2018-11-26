@@ -270,7 +270,7 @@ func TestExtractAddress(t *testing.T) {
 	// p2sh
 	_, scriptPubKey = genP2SHScript()
 	_, err = scriptPubKey.ExtractAddress()
-	ensure.NotNil(t, err)
+	ensure.Nil(t, err)
 }
 
 func TestGetNthOp(t *testing.T) {
@@ -306,4 +306,14 @@ func TestGetNthOp(t *testing.T) {
 	ensure.DeepEqual(t, opCode, OPCHECKSIG)
 	opCode, _, _, err = scriptPubKey.getNthOp(pc /* start pc */, 3 /* n-th */)
 	ensure.NotNil(t, err)
+}
+
+func TestParseSplitAddrScript(t *testing.T) {
+	pubKeys := [][]byte{testPubKeyBytes, testPubKeyBytes1, testPubKeyBytes2}
+	weights := []uint64{1, 4, 7}
+	splitAddrScript := SplitAddrScript(pubKeys, weights)
+	pubKeys1, weights1, err := splitAddrScript.parseSplitAddrScript()
+	ensure.Nil(t, err)
+	ensure.DeepEqual(t, pubKeys1, pubKeys)
+	ensure.DeepEqual(t, weights1, weights)
 }

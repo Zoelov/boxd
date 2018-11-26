@@ -54,7 +54,7 @@ func SplitAddrScript(pubKeys [][]byte, weights []uint64) *Script {
 	}
 	n := len(pubKeys)
 
-	// 1 [(pubkey1, w1 OP_DROP), (pubkey2, w2 OP_DROP), (pubkey3, w3 OP_DROP), ...] N CHECKMULTISIG
+	// 1 [(pubkey1, w1, OP_DROP), (pubkey2, w2, OP_DROP), (pubkey3, w3, OP_DROP), ...] N CHECKMULTISIG
 	s := NewScript()
 	s.AddOpCode(OP1)
 	for i := 0; i < n; i++ {
@@ -572,18 +572,77 @@ func (s *Script) getNthOp(pcStart, n int) (OpCode, Operand, int /* pc */, error)
 
 // ExtractAddress returns address within the script
 func (s *Script) ExtractAddress() (types.Address, error) {
-	// only applies to p2pkh & token txs
-	if !s.IsPayToPubKeyHash() && !s.IsTokenIssue() && !s.IsTokenTransfer() {
+	addrIdx := 0
+	if s.IsPayToPubKeyHash() || s.IsTokenIssue() || s.IsTokenTransfer() {
+		// p2pkh scriptPubKey: OPDUP OPHASH160 <pubKeyHash> OPEQUALVERIFY OPCHECKSIG [token parameters]
+		addrIdx = 2
+	} else if s.IsPayToScriptHash() {
+		// OP_HASH160 <160-bit redeemp script hash> OP_EQUAL
+		addrIdx = 1
+	} else {
 		return nil, ErrAddressNotApplicable
 	}
 
-	// p2pkh scriptPubKey: OPDUP OPHASH160 <pubKeyHash> OPEQUALVERIFY OPCHECKSIG [token parameters]
-	_, pubKeyHash, _, err := s.getNthOp(0, 2)
+	_, pubKeyHash, _, err := s.getNthOp(0, addrIdx)
 	if err != nil {
 		return nil, err
 	}
 
 	return types.NewAddressPubKeyHash(pubKeyHash)
+}
+
+// 1 [(pubkey1, w1, OP_DROP), (pubkey2, w2, OP_DROP), (pubkey3, w3, OP_DROP), ...] N CHECKMULTISIG
+// returns [pubkey1, pubkey2, pubkey3, ...], [w1, w2, w3, ...]
+func (s *Script) parseSplitAddrScript() ([][]byte, []uint64, error) {
+	opCode, _, pcStart, err := s.getNthOp(0, 0)
+	if err != nil || opCode != OP1 {
+		return nil, nil, ErrInvalidSplitAddrScript
+	}
+
+	pubKeys := make([][]byte, 0)
+	weights := make([]uint64, 0)
+
+	for {
+		// public key
+		_, pubKeyOp, pc, err := s.getNthOp(pcStart, 0)
+		if err != nil {
+			return nil, nil, ErrInvalidSplitAddrScript
+		}
+		// weight
+		opCode1, weightOp, pc, err := s.getNthOp(pc, 0)
+		if err != nil {
+			return nil, nil, ErrInvalidSplitAddrScript
+		}
+		// OP_DROP
+		opCode2, _, pc, err := s.getNthOp(pc, 0)
+		if err != nil {
+			if err != ErrScriptBound {
+				return nil, nil, ErrInvalidSplitAddrScript
+			}
+			n, err := pubKeyOp.int()
+			if err != nil {
+				return nil, nil, ErrInvalidSplitAddrScript
+			}
+			// Expect N CHECKMULTISIG
+			if n == len(pubKeys) && opCode1 == OPCHECKMULTISIG {
+				// Reached script end
+				return pubKeys, weights, nil
+			}
+			return nil, nil, ErrInvalidSplitAddrScript
+		}
+		if opCode2 != OPDROP {
+			return nil, nil, ErrInvalidSplitAddrScript
+		}
+
+		weight, err := weightOp.int()
+		if err != nil {
+			return nil, nil, ErrInvalidSplitAddrScript
+		}
+		weights = append(weights, uint64(weight))
+		pubKeys = append(pubKeys, pubKeyOp)
+
+		pcStart = pc
+	}
 }
 
 // GetSigOpCount returns number of signature operations in a script

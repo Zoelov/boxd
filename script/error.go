@@ -22,6 +22,7 @@ var (
 	ErrScriptSignatureVerifyFail = errors.New("ScriptErrSignatureVerifyFail")
 	ErrInputIndexOutOfBound      = errors.New("input index out of bound")
 	ErrAddressNotApplicable      = errors.New("Address only applies to p2pkh and token txs")
+	ErrInvalidSplitAddrScript    = errors.New("Invalid split address script")
 
 	// stack.go
 	ErrFinalStackEmpty       = errors.New("Final stack empty")
