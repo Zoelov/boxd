@@ -275,7 +275,7 @@ func generateTx(fromAddr types.Address, utxos []*rpcpb.Utxo, targets []*Transfer
 	return tx, nil
 }
 
-func signTransaction(tx *corepb.Transaction, utxos []*rpcpb.Utxo, fromPubKeyBytes []byte, isSplitAddr bool, signer crypto.Signer) error {
+func signTransaction(tx *corepb.Transaction, utxos []*rpcpb.Utxo, fromPubKeyBytes []byte, pubKeyIdx int, isSplitAddr bool, signer crypto.Signer) error {
 	// Sign the tx inputs
 	typedTx := &types.Transaction{}
 	if err := typedTx.FromProtoMessage(tx); err != nil {
@@ -302,7 +302,7 @@ func signTransaction(tx *corepb.Transaction, utxos []*rpcpb.Utxo, fromPubKeyByte
 		if err != nil {
 			return err
 		}
-		scriptSig := script.SignatureScript(sig, fromPubKeyBytes)
+		scriptSig := script.SignatureScript(sig, fromPubKeyBytes, pubKeyIdx)
 		txIn.ScriptSig = *scriptSig
 		tx.Vin[txInIdx].ScriptSig = *scriptSig
 

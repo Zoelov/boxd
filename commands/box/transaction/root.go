@@ -11,6 +11,7 @@ import (
 	root "github.com/BOXFoundation/boxd/commands/box/root"
 	"github.com/BOXFoundation/boxd/core/types"
 	"github.com/BOXFoundation/boxd/rpc/client"
+	"github.com/BOXFoundation/boxd/script"
 	"github.com/BOXFoundation/boxd/util"
 	"github.com/BOXFoundation/boxd/wallet"
 	"github.com/spf13/cobra"
@@ -120,7 +121,7 @@ func sendFromCmdFunc(cmd *cobra.Command, args []string) {
 	}
 	conn := client.NewConnectionWithViper(viper.GetViper())
 	defer conn.Close()
-	tx, err := client.CreateTransaction(conn, fromAddr, fromAddr, target, false, false, account.PublicKey(), account)
+	tx, err := client.CreateTransaction(conn, fromAddr, fromAddr, target, false, false, account.PublicKey(), script.InvalidIdx, account)
 	if err != nil {
 		fmt.Println(err)
 	} else {
@@ -166,7 +167,7 @@ func sendManyCmdFunc(cmd *cobra.Command, args []string) {
 	}
 	conn := client.NewConnectionWithViper(viper.GetViper())
 	defer conn.Close()
-	tx, err := client.CreateTransaction(conn, fromAddr, fromAddr, target, false, false, account.PublicKey(), account)
+	tx, err := client.CreateTransaction(conn, fromAddr, fromAddr, target, false, false, account.PublicKey(), script.InvalidIdx, account)
 	if err != nil {
 		fmt.Println(err)
 	} else {

@@ -83,7 +83,7 @@ func FundTokenTransaction(conn *grpc.ClientConn, addr types.Address, token *type
 
 // CreateTransaction retrieves all the utxo of a public key, and use some of them to send transaction
 func CreateTransaction(conn *grpc.ClientConn, fromAddress, changeAddress types.Address, targets map[types.Address]uint64,
-	isFromAddrSplit bool, isToAddrSplit bool, pubKeyBytes []byte, signer crypto.Signer) (*types.Transaction, error) {
+	isFromAddrSplit bool, isToAddrSplit bool, pubKeyBytes []byte, pubKeyIdx int, signer crypto.Signer) (*types.Transaction, error) {
 	var totalAmount uint64
 	transferTargets := make([]*TransferParam, 0)
 	for addr, amount := range targets {
@@ -115,12 +115,12 @@ func CreateTransaction(conn *grpc.ClientConn, fromAddress, changeAddress types.A
 		if tx, err = generateTx(fromAddress, utxoResponse.GetUtxos(), transferTargets, change); err != nil {
 			return nil, err
 		}
-		if err = signTransaction(tx, utxoResponse.GetUtxos(), pubKeyBytes, isFromAddrSplit, signer); err != nil {
+		if err = signTransaction(tx, utxoResponse.GetUtxos(), pubKeyBytes, pubKeyIdx, isFromAddrSplit, signer); err != nil {
 			return nil, err
 		}
 		ok, adjustedAmount := tryBalance(tx, change, utxoResponse.Utxos, price)
 		if ok {
-			signTransaction(tx, utxoResponse.GetUtxos(), pubKeyBytes, isFromAddrSplit, signer)
+			signTransaction(tx, utxoResponse.GetUtxos(), pubKeyBytes, pubKeyIdx, isFromAddrSplit, signer)
 			break
 		}
 		totalAmount = adjustedAmount

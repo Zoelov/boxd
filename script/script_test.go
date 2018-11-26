@@ -139,9 +139,9 @@ func genP2SHScript() (*Script, *Script) {
 	hash, _ := CalcTxHashForSig([]byte(*redeemScript), tx, 0)
 	sig, _ := crypto.Sign(testPrivKey, hash)
 	sigBytes := sig.Serialize()
-	// unlocking script: signature <redeemScript>
+	// unlocking script: signature 1 <redeemScript>
 	// Note: <redeemScript> is serialized, i.e., AddOperand not AddScript
-	scriptSig := NewScript().AddOperand(sigBytes).AddOperand(*redeemScript)
+	scriptSig := NewScript().AddOperand(sigBytes).AddOperand(big.NewInt(int64(1)).Bytes()).AddOperand(*redeemScript)
 
 	return scriptSig, scriptPubKey
 }

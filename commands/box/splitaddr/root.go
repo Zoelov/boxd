@@ -124,7 +124,7 @@ func sendFromCmdFunc(cmd *cobra.Command, args []string) {
 	conn := client.NewConnectionWithViper(viper.GetViper())
 	defer conn.Close()
 	tx, err := client.CreateTransaction(conn, fromAddr, fromAddr, target, false, /* from addr not split */
-		true /* to addr split */, account.PublicKey(), account)
+		true /* to addr split */, account.PublicKey(), script.InvalidIdx, account)
 	if err != nil {
 		fmt.Println(err)
 	} else {
@@ -135,6 +135,8 @@ func sendFromCmdFunc(cmd *cobra.Command, args []string) {
 }
 
 func redeemCmdFunc(cmd *cobra.Command, args []string) {
+	// pubkey index starts from 1
+	// redeem pubkey_idx2 toAddr amount [(addr1, weight1), (addr2, weight2), (addr3, weight3), ...]
 	if len(args) < 5 {
 		fmt.Println("Invalid argument number")
 		return
@@ -144,12 +146,12 @@ func redeemCmdFunc(cmd *cobra.Command, args []string) {
 		fmt.Println(err)
 		return
 	}
-	addrs, weights, err := parsePubKeyWeight(args[3:])
+	pubKeys, weights, err := parsePubKeyWeight(args[3:])
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	splitAddr, splitScript, err := createSplitAddr(addrs, weights)
+	splitAddr, splitScript, err := createSplitAddr(pubKeys, weights)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -159,10 +161,28 @@ func redeemCmdFunc(cmd *cobra.Command, args []string) {
 		fmt.Println(err)
 		return
 	}
-	// TODO: ensure sender is in addrs
-	account, exists := wltMgr.GetAccount(args[0])
+
+	pubKeyIdx, err := strconv.Atoi(args[0])
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	// pubKeyIdx starts from 1
+	pubKeyBytes := pubKeys[pubKeyIdx-1]
+	pubKey, err := crypto.PublicKeyFromBytes(pubKeyBytes)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	pubKeyHash, err := types.NewAddressFromPubKey(pubKey)
+	if err != nil {
+		fmt.Println(err)
+		return
+	}
+	addr := pubKeyHash.String()
+	account, exists := wltMgr.GetAccount(addr)
 	if !exists {
-		fmt.Printf("Account %s not managed\n", args[0])
+		fmt.Printf("Account %s not managed\n", addr)
 		return
 	}
 	passphrase, err := wallet.ReadPassphraseStdin()
@@ -178,17 +198,17 @@ func redeemCmdFunc(cmd *cobra.Command, args []string) {
 	if err != nil {
 		fmt.Println("Invalid address: ", splitAddr)
 	}
-	changeAddr, err := types.NewAddress(args[0])
+	changeAddr, err := types.NewAddress(addr)
 	if err != nil {
-		fmt.Println("Invalid address: ", args[0])
+		fmt.Println("Invalid address: ", addr)
 	}
 	conn := client.NewConnectionWithViper(viper.GetViper())
 	defer conn.Close()
 
 	// p2pkh unlock: sig + pubKey
-	// split unlock: sig + redeem script
+	// split unlock: sig + sig index + redeem script
 	tx, err := client.CreateTransaction(conn, fromSplitAddr, changeAddr, target, true, /* from addr split */
-		false /* to addr not split */, *splitScript /* at the same place as public key*/, account)
+		false /* to addr not split */, *splitScript /* at the same place as public key*/, pubKeyIdx, account)
 	if err != nil {
 		fmt.Println(err)
 	} else {
@@ -204,12 +224,12 @@ func getBalanceCmdFunc(cmd *cobra.Command, args []string) {
 		fmt.Println("Invalid argument number: expect even number")
 		return
 	}
-	addrs, weights, err := parsePubKeyWeight(args)
+	pubKeys, weights, err := parsePubKeyWeight(args)
 	if err != nil {
 		fmt.Println(err)
 		return
 	}
-	splitAddr, _, err := createSplitAddr(addrs, weights)
+	splitAddr, _, err := createSplitAddr(pubKeys, weights)
 	if err != nil {
 		fmt.Println(err)
 		return
@@ -227,7 +247,7 @@ func getBalanceCmdFunc(cmd *cobra.Command, args []string) {
 	for _, weight := range weights {
 		totalWeight += weight
 	}
-	for i, addr := range addrs {
+	for i, addr := range pubKeys {
 		fmt.Printf("Address: %v\t balance: %d\n", addr, totalBalance*weights[i]/totalWeight)
 	}
 	fmt.Println("Total balance: ", totalBalance)

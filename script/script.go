@@ -22,6 +22,9 @@ var logger = log.NewLogger("script") // logger
 const (
 	p2PKHScriptLen = 25
 	p2SHScriptLen  = 23
+
+	// InvalidIdx represents invalid index
+	InvalidIdx = -1
 )
 
 // PayToPubKeyHashScript creates a script to lock a transaction output to the specified address.
@@ -30,8 +33,13 @@ func PayToPubKeyHashScript(pubKeyHash []byte) *Script {
 }
 
 // SignatureScript creates a script to unlock a utxo.
-func SignatureScript(sig *crypto.Signature, pubKey []byte) *Script {
-	return NewScript().AddOperand(sig.Serialize()).AddOperand(pubKey)
+func SignatureScript(sig *crypto.Signature, pubKey []byte, pubKeyIdx int) *Script {
+	s := NewScript().AddOperand(sig.Serialize())
+	if pubKeyIdx != InvalidIdx {
+		// for split address
+		s.AddOperand(big.NewInt(int64(pubKeyIdx)).Bytes())
+	}
+	return s.AddOperand(pubKey)
 }
 
 // StandardCoinbaseSignatureScript returns a standard signature script for coinbase transaction.
@@ -52,17 +60,15 @@ func SplitAddrScript(pubKeys [][]byte, weights []uint64) *Script {
 	if len(pubKeys) != len(weights) {
 		return nil
 	}
-	n := len(pubKeys)
 
-	// 1 [(pubkey1, w1, OP_DROP), (pubkey2, w2, OP_DROP), (pubkey3, w3, OP_DROP), ...] N CHECKMULTISIG
+	// [(pubkey1, w1, OP_DROP), (pubkey2, w2, OP_DROP), (pubkey3, w3, OP_DROP), ...] CHECKANYSIG
 	s := NewScript()
-	s.AddOpCode(OP1)
-	for i := 0; i < n; i++ {
+	for i := 0; i < len(pubKeys); i++ {
 		weight := big.NewInt(0)
 		weight.SetUint64(weights[i])
 		s.AddOperand(pubKeys[i]).AddOperand(weight.Bytes()).AddOpCode(OPDROP)
 	}
-	return s.AddOperand(big.NewInt(int64(n)).Bytes()).AddOpCode(OPCHECKMULTISIG)
+	return s.AddOpCode(OPCHECKANYSIG)
 }
 
 // Script represents scripts
@@ -129,16 +135,20 @@ func Validate(scriptSig, scriptPubKey *Script, tx *types.Transaction, txInIdx in
 		return nil
 	}
 
-	// Handle p2sh
-	// scriptSig: signature <serialized redeemScript>
+	// Handle customized p2sh, mainly for split address
+	// scriptSig: signature pubKeyIdx <serialized redeemScript>
 	//
 
 	// First operand is signature
-	_, sig, newPc, _ := scriptSig.parseNextOp(0)
+	_, sig, pc, _ := scriptSig.parseNextOp(0)
 	newScriptSig := NewScript().AddOperand(sig)
 
-	// Second operand is serialized redeem script
-	_, redeemScriptBytes, _, _ := scriptSig.parseNextOp(newPc)
+	// Second operand is pubkey index
+	_, pubKey, pc, _ := scriptSig.parseNextOp(pc)
+	newScriptSig.AddOperand(pubKey)
+
+	// Third operand is serialized redeem script
+	_, redeemScriptBytes, _, _ := scriptSig.parseNextOp(pc)
 	redeemScript := NewScriptFromBytes(redeemScriptBytes)
 
 	// signature becomes the new scriptSig, redeemScript becomes the new scriptPubKey
@@ -620,58 +630,51 @@ func (s *Script) ExtractAddress() (types.Address, error) {
 	return types.NewAddressPubKeyHash(pubKeyHash)
 }
 
-// 1 [(pubkey1, w1, OP_DROP), (pubkey2, w2, OP_DROP), (pubkey3, w3, OP_DROP), ...] N CHECKMULTISIG
+// [(pubkey1, w1, OP_DROP), (pubkey2, w2, OP_DROP), (pubkey3, w3, OP_DROP), ...] CHECKANYSIG
 // returns [pubkey1, pubkey2, pubkey3, ...], [w1, w2, w3, ...]
 func (s *Script) parseSplitAddrScript() ([][]byte, []uint64, error) {
-	opCode, _, pcStart, err := s.getNthOp(0, 0)
-	if err != nil || opCode != OP1 {
-		return nil, nil, ErrInvalidSplitAddrScript
-	}
-
 	pubKeys := make([][]byte, 0)
 	weights := make([]uint64, 0)
 
-	for {
+	for pcStart := 0; ; {
 		// public key
-		_, pubKeyOp, pc, err := s.getNthOp(pcStart, 0)
+		opCode1, pubKeyOp, pc, err := s.getNthOp(pcStart, 0)
 		if err != nil {
-			return nil, nil, ErrInvalidSplitAddrScript
+			break
 		}
 		// weight
-		opCode1, weightOp, pc, err := s.getNthOp(pc, 0)
+		_, weightOp, pc, err := s.getNthOp(pc, 0)
 		if err != nil {
-			return nil, nil, ErrInvalidSplitAddrScript
+			if err != ErrScriptBound {
+				break
+			}
+			// Expect CHECKANYSIG
+			if opCode1 == OPCHECKANYSIG {
+				// Reached script end
+				return pubKeys, weights, nil
+			}
+			break
 		}
 		// OP_DROP
 		opCode2, _, pc, err := s.getNthOp(pc, 0)
 		if err != nil {
-			if err != ErrScriptBound {
-				return nil, nil, ErrInvalidSplitAddrScript
-			}
-			n, err := pubKeyOp.int()
-			if err != nil {
-				return nil, nil, ErrInvalidSplitAddrScript
-			}
-			// Expect N CHECKMULTISIG
-			if n == len(pubKeys) && opCode1 == OPCHECKMULTISIG {
-				// Reached script end
-				return pubKeys, weights, nil
-			}
-			return nil, nil, ErrInvalidSplitAddrScript
+			break
 		}
 		if opCode2 != OPDROP {
-			return nil, nil, ErrInvalidSplitAddrScript
+			break
 		}
 
 		weight, err := weightOp.int()
 		if err != nil {
-			return nil, nil, ErrInvalidSplitAddrScript
+			break
 		}
 		weights = append(weights, uint64(weight))
 		pubKeys = append(pubKeys, pubKeyOp)
 
 		pcStart = pc
 	}
+
+	return nil, nil, ErrInvalidSplitAddrScript
 }
 
 // GetSigOpCount returns number of signature operations in a script

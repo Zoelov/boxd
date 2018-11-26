@@ -75,7 +75,7 @@ func createChildTx(parentTx *types.Transaction) *types.Transaction {
 		if err != nil {
 			return nil
 		}
-		scriptSig := script.SignatureScript(sig, pubKey.Serialize())
+		scriptSig := script.SignatureScript(sig, pubKey.Serialize(), script.InvalidIdx)
 		txIn.ScriptSig = *scriptSig
 
 		// test to ensure

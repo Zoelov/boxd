@@ -12,6 +12,7 @@ import (
 	"github.com/BOXFoundation/boxd/core/types"
 	"github.com/BOXFoundation/boxd/rpc/client"
 	"github.com/BOXFoundation/boxd/rpc/pb"
+	"github.com/BOXFoundation/boxd/script"
 	"github.com/BOXFoundation/boxd/wallet"
 	"google.golang.org/grpc"
 )
@@ -110,7 +111,7 @@ func execTx(account *wallet.Account, toAddrs []string, amounts []uint64,
 
 	start := time.Now()
 	_, err = client.CreateTransaction(conn, fromAddress, fromAddress, addrAmountMap, false, false,
-		account.PublicKey(), account)
+		account.PublicKey(), script.InvalidIdx, account)
 	if time.Since(start) > 2*rpcInterval {
 		logger.Warnf("cost %v for CreateTransaction on %s", time.Since(start), peerAddr)
 	}
