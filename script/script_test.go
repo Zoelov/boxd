@@ -197,6 +197,36 @@ func TestMultisig(t *testing.T) {
 	}
 }
 
+// test anysig script
+func TestAnysig(t *testing.T) {
+	// locking script: <Public Key A> <Public Key B> <Public Key C> CHECKANYSIG
+	scriptPubKey := NewScript().AddOperand(testPubKeyBytes).AddOperand(testPubKeyBytes1).AddOperand(testPubKeyBytes2).AddOpCode(OPCHECKANYSIG)
+
+	hash, _ := CalcTxHashForSig([]byte(*scriptPubKey), tx, 0)
+
+	sigs := make([][]byte, 0)
+
+	sig, _ := crypto.Sign(testPrivKey, hash)
+	sigs = append(sigs, sig.Serialize())
+
+	sig, _ = crypto.Sign(testPrivKey1, hash)
+	sigs = append(sigs, sig.Serialize())
+
+	sig, _ = crypto.Sign(testPrivKey2, hash)
+	sigs = append(sigs, sig.Serialize())
+
+	for i, sig := range sigs {
+		// unlock script: sig, sigIdx
+		scriptSig := NewScript().AddOperand(sig).AddOperand(big.NewInt(int64(i + 1)).Bytes())
+		err := Validate(scriptSig, scriptPubKey, tx, 0)
+		ensure.Nil(t, err)
+	}
+
+	scriptSig := NewScript().AddOperand(sigs[0]).AddOperand(big.NewInt(int64(2)).Bytes())
+	err := Validate(scriptSig, scriptPubKey, tx, 0)
+	ensure.NotNil(t, err)
+}
+
 func TestDisasm(t *testing.T) {
 	script := NewScript().AddOpCode(OP8).AddOpCode(OP6).AddOpCode(OPADD).AddOpCode(OP14).AddOpCode(OPEQUAL)
 	ensure.DeepEqual(t, script.Disasm(), "OP_8 OP_6 OP_ADD OP_14 OP_EQUAL")

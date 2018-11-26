@@ -424,6 +424,35 @@ func (s *Script) execOp(opCode OpCode, pushData Operand, tx *types.Transaction,
 			}
 		}
 
+	case OPCHECKANYSIG:
+		// Format: e.g., 3 means signature is for the third public key, aka, C
+		// <Signature C> 3 | <Public Key A> <Public Key B> <Public Key C> <Public Key D> CHECKANYSIG
+		n := stack.size()
+		if n < 3 {
+			return ErrInvalidStackOperation
+		}
+		sigIdx, err := stack.topN(n - 1).int()
+		if err != nil {
+			return err
+		}
+		pubKeyCount := n - 2
+		// stack order is reversed
+		pubKeyIdx := pubKeyCount - sigIdx + 1
+		pubKey := stack.topN(pubKeyIdx)
+
+		signature := stack.topN(n)
+
+		// script consists of: scriptSig + OPCODESEPARATOR + scriptPubKey
+		scriptPubKey := (*s)[*scriptPubKeyStart:]
+
+		isVerified := verifySig(signature, pubKey, scriptPubKey, tx, txInIdx)
+
+		if isVerified {
+			stack.push(operandTrue)
+		} else {
+			stack.push(operandFalse)
+		}
+
 	default:
 		return ErrBadOpcode
 	}
